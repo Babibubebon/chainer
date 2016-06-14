@@ -79,6 +79,8 @@ elif args.net == 'parallel':
 optimizer = optimizers.Adam()
 #optimizer = optimizers.SGD()
 optimizer.setup(model)
+# 正則化
+optimizer.add_hook(chainer.optimizer.WeightDecay(0.001))
 
 # Init/Resume
 if args.initmodel:
@@ -107,7 +109,6 @@ for epoch in six.moves.range(1, n_epoch + 1):
         x = chainer.Variable(xp.asarray(x_train[perm[i:i + batchsize]]))
         t = chainer.Variable(xp.asarray(y_train[perm[i:i + batchsize]]))
 
-        optimizer.weight_decay(0.001)
         # Pass the loss function (Classifier defines it) and its arguments
         optimizer.update(model, x, t)
 
