@@ -8,6 +8,8 @@ from __future__ import print_function
 import argparse
 import time
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 import six
 
@@ -75,6 +77,7 @@ elif args.net == 'parallel':
 
 # Setup optimizer
 optimizer = optimizers.Adam()
+#optimizer = optimizers.SGD()
 optimizer.setup(model)
 
 # Init/Resume
@@ -84,6 +87,12 @@ if args.initmodel:
 if args.resume:
     print('Load optimizer state from', args.resume)
     serializers.load_npz(args.resume, optimizer)
+
+train_time = 0
+train_loss = []
+train_accuracy = []
+test_loss = []
+test_accuracy = []
 
 # Learning loop
 for epoch in six.moves.range(1, n_epoch + 1):
@@ -98,6 +107,7 @@ for epoch in six.moves.range(1, n_epoch + 1):
         x = chainer.Variable(xp.asarray(x_train[perm[i:i + batchsize]]))
         t = chainer.Variable(xp.asarray(y_train[perm[i:i + batchsize]]))
 
+        optimizer.weight_decay(0.001)
         # Pass the loss function (Classifier defines it) and its arguments
         optimizer.update(model, x, t)
 
@@ -122,6 +132,10 @@ for epoch in six.moves.range(1, n_epoch + 1):
     print('train mean loss={}, accuracy={}, throughput={} images/sec'.format(
         sum_loss / N, sum_accuracy / N, throughput))
 
+    train_time += elapsed_time
+    train_loss.append(sum_loss / N)
+    train_accuracy.append(sum_accuracy / N)
+
     # evaluation
     sum_accuracy = 0
     sum_loss = 0
@@ -137,8 +151,42 @@ for epoch in six.moves.range(1, n_epoch + 1):
     print('test  mean loss={}, accuracy={}'.format(
         sum_loss / N_test, sum_accuracy / N_test))
 
+    test_loss.append(sum_loss / N_test)
+    test_accuracy.append(sum_accuracy / N_test)
+
 # Save the model and the optimizer
 print('save the model')
 serializers.save_npz('mlp.model', model)
 print('save the optimizer')
 serializers.save_npz('mlp.state', optimizer)
+
+print('train time={} s'.format(train_time))
+
+# グラフ
+df = pd.DataFrame({
+    'epoch': range(1, n_epoch+1),
+    'train_loss': train_loss,
+    'train_accuracy': train_accuracy,
+    'test_loss': test_loss,
+    'test_accuracy': test_accuracy,
+})
+
+# 誤差の折れ線グラフ
+fig = plt.figure()
+ax = df.plot(x='epoch', y='train_loss', style="k-")
+df.plot(x='epoch', y='test_loss', style="k--", dashes=(3, 1.5), ax=ax)
+ax.set_xlabel(u'epoch')
+ax.set_ylabel(u'loss')
+ax.legend(labels=[u'train', u'test'])
+plt.tight_layout()
+
+# 正解率の折れ線グラフ
+fig = plt.figure()
+ax = df.plot(x='epoch', y='train_accuracy', style="k-")
+df.plot(x='epoch', y='test_accuracy', style="k--", dashes=(3, 1.5), ax=ax)
+ax.set_xlabel(u'epoch')
+ax.set_ylabel(u'accuracy')
+ax.legend(labels=[u'train', u'test'], loc='lower right')
+plt.tight_layout()
+
+plt.show()
